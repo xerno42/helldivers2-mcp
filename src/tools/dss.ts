@@ -4,7 +4,7 @@ import { TacticalActionStatusTypes } from '../enums.js';
 import { formatPlanetDetails, loadWarSnapshot } from '../format-planet.js';
 import { lookupEffect, lookupItem } from '../reference-data.js';
 import { Tool } from '../tool-types.js';
-import { errorResponse, stripSpan, textResponse, toRelativeTime } from '../utils.js';
+import { errorResponse, stripItalic, stripSpan, textResponse, toRelativeTime } from '../utils.js';
 
 function formatTacticalAction(action: ApiV2TacticalAction): string {
   const effects =
@@ -13,7 +13,7 @@ function formatTacticalAction(action: ApiV2TacticalAction): string {
           .map((id) => {
             const effect = lookupEffect(id);
             if (effect) {
-              return `Name: ${effect.name ?? 'Unknown'}, Description: ${effect.description ?? 'Unknown'}`;
+              return `Name: ${effect.name ?? 'Unknown'}, Description: ${stripItalic(effect.description ?? '') || 'Unknown'}`;
             }
             return `Effect ID ${id} information not found.`;
           })

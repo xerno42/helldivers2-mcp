@@ -5,5 +5,5 @@ dist
 .DS_Store
 *.yaml
 .vscode
-server.json
-*.sh
+.claude
+.wrangler
