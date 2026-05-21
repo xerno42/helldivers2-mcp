@@ -1,0 +1,10 @@
+.claude
+.wrangler
+.vscode
+DS_Store
+node_modules
+dist
+src/__tests__
+*.example
+*.log
+*.md
