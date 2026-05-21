@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MCP server exposing live Helldivers 2 galactic war data.",
   "type": "module",
+  "mcpName": "io.github.xerno42/helldivers2-mcp",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -34,6 +35,11 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.3",
     "wrangler": "^4.92.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xerno42/helldivers2-mcp",
+    "description": "An MCP server for Helldivers 2."
   },
   "license": "MIT"
 }

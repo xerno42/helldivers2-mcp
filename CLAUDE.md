@@ -29,8 +29,9 @@ pnpm test src/__tests__/tools.war.test.ts
 
 ```
 src/
-  index.ts           — Express app, MCP server factory, request routing
+  index.ts           — Express app, MCP server factory, request routing, origin guard, incoming rate limiter
   client.ts          — hd2Fetch(): in-memory cache + rate-limit queue over api.helldivers2.dev
+  rate-limit.ts      — createRateLimiter(): token-bucket middleware for incoming /mcp requests (per-IP)
   reference-data.ts  — reads json/ files at startup, exposes lookup helpers
   format-planet.ts   — loadWarSnapshot() (fetches 3 endpoints in parallel), formatPlanetDetails(), formatActivePlanetSummary()
   tool-types.ts      — Tool / ToolDefinition / ToolResult / ToolHandler interfaces
@@ -66,13 +67,32 @@ Parallel-fetches `/api/v1/war/status`, `/api/v1/war/info`, and `/api/v1/stats/wa
 
 ## Environment
 
-```
-X_SUPER_CONTACT=your-email@example.com   # sent as X-Super-Contact header per API etiquette
-PORT=3000
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `X_SUPER_CONTACT` | *(required)* | Forwarded as `X-Super-Contact` to upstream API per their usage guidelines |
+| `PORT` | `3000` | HTTP port to listen on |
+| `BIND_HOST` | `127.0.0.1` | Interface to bind — use `0.0.0.0` in Docker/containers |
+| `MCP_ALLOWED_ORIGINS` | *(unset)* | Comma-separated browser `Origin` values to allow. **Unset = all browser-originated requests are blocked**; server-to-server calls (no `Origin` header) are always allowed |
+| `MCP_RATE_LIMIT_PER_MIN` | `60` | Sustained incoming request rate per IP (requests/minute) |
+| `MCP_RATE_LIMIT_BURST` | `= MCP_RATE_LIMIT_PER_MIN` | Burst capacity for the token-bucket rate limiter |
 
 ## TypeScript & Module Setup
 
 - `"type": "module"` — use `import/export`, never `require`.
 - All imports of local `.ts` files must use the `.js` extension (resolved by `moduleNameMapper` in Jest and by `tsx` at runtime).
 - ESM Jest is enabled via `node --experimental-vm-modules`; the `ts-jest` preset handles transpilation.
+
+## Writing Tests
+
+Tests use `jest.unstable_mockModule` (ESM-compatible). Modules must be mocked **before** the module under test is imported, using a top-level `await import(...)` after the mock setup:
+
+```typescript
+jest.unstable_mockModule('../client.js', () => ({ hd2Fetch: jest.fn() }));
+jest.unstable_mockModule('../format-planet.js', () => ({
+  loadWarSnapshot: mockLoadWarSnapshot,
+  formatActivePlanetSummary: mockFormatActivePlanetSummary,
+}));
+
+// import AFTER mocks are registered
+const { getWarStatus } = await import('../tools/war.js');
+```

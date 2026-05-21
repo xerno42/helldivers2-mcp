@@ -8,3 +8,5 @@ src/__tests__
 *.example
 *.log
 *.md
+LICENSE
+server.json

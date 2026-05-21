@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.xerno42/helldivers2-mcp",
+  "description": "MCP server exposing live Helldivers 2 galactic war data.",
+  "repository": {
+    "url": "https://github.com/xerno42/helldivers2-mcp",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "helldivers2-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.avengersofsuperearth.com/mcp"
+    }
+  ]
+}
