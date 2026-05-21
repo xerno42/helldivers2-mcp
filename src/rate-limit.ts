@@ -11,14 +11,24 @@ export interface RateLimiterOptions {
   maxKeys?: number;
 }
 
-export function createRateLimiter(opts: RateLimiterOptions) {
+export interface TakeResult {
+  allowed: boolean;
+  retryAfter: number;
+}
+
+export interface TokenBucket {
+  take(key: string): TakeResult;
+}
+
+export function createTokenBucket(opts: RateLimiterOptions): TokenBucket {
   const { capacity, refillPerSec, maxKeys = 10_000 } = opts;
   const buckets = new Map<string, Bucket>();
+  const retryAfter = Math.max(1, Math.ceil(1 / refillPerSec));
 
-  function take(key: string, now: number): boolean {
+  function take(key: string): TakeResult {
+    const now = Date.now();
     let b = buckets.get(key);
     if (!b) {
-      // Crude eviction: if we hit the cap, drop the oldest insertion.
       if (buckets.size >= maxKeys) {
         const oldest = buckets.keys().next().value;
         if (oldest !== undefined) buckets.delete(oldest);
@@ -30,19 +40,25 @@ export function createRateLimiter(opts: RateLimiterOptions) {
       b.tokens = Math.min(capacity, b.tokens + elapsed * refillPerSec);
       b.updatedAt = now;
     }
-    if (b.tokens < 1) return false;
+    if (b.tokens < 1) return { allowed: false, retryAfter };
     b.tokens -= 1;
-    return true;
+    return { allowed: true, retryAfter };
   }
+
+  return { take };
+}
+
+export function createRateLimiter(opts: RateLimiterOptions) {
+  const bucket = createTokenBucket(opts);
 
   return function rateLimit(req: Request, res: Response, next: () => void): void {
     const key = req.ip ?? req.socket.remoteAddress ?? 'unknown';
-    if (take(key, Date.now())) {
+    const result = bucket.take(key);
+    if (result.allowed) {
       next();
       return;
     }
-    const retryAfter = Math.max(1, Math.ceil(1 / refillPerSec));
-    res.set('Retry-After', String(retryAfter));
+    res.set('Retry-After', String(result.retryAfter));
     res.status(429).json({
       jsonrpc: '2.0',
       error: { code: -32000, message: 'Rate limit exceeded' },

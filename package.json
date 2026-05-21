@@ -11,7 +11,8 @@
     "lint": "eslint src",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest --coverage"
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest --coverage",
+    "cf:deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

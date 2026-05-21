@@ -6,4 +6,5 @@ dist
 *.yaml
 .vscode
 server.json
-*.sh
+.claude
+.wrangler

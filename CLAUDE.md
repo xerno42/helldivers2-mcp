@@ -8,6 +8,10 @@ A standalone MCP server that exposes live Helldivers 2 galactic war data to LLMs
 
 The upstream data source is the community API at `https://api.helldivers2.dev`. A `GET /health` endpoint is also served for liveness checks.
 
+There are two entry points sharing the same tool implementations:
+- **`src/index.ts`** — Express app for local/Docker deployment
+- **`src/worker.ts`** — Cloudflare Workers entry point using `WorkerTransport` (a custom stateless `Transport` that dispatches a single JSON-RPC message and resolves with the response, avoiding Node's `http` module)
+
 ## Development Commands
 
 ```bash
@@ -18,6 +22,7 @@ pnpm lint             # eslint src
 pnpm test             # Jest (ESM mode via --experimental-vm-modules)
 pnpm test:watch
 pnpm test:coverage
+pnpm cf:deploy        # build + wrangler deploy to Cloudflare Workers
 ```
 
 Run a single test file:
@@ -25,13 +30,22 @@ Run a single test file:
 pnpm test src/__tests__/tools.war.test.ts
 ```
 
+Run live integration tests against a running server:
+```bash
+tsx scripts/endpoint-tests.ts
+SERVER=http://localhost:3000 tsx scripts/endpoint-tests.ts
+```
+
 ## Architecture
 
 ```
 src/
   index.ts           — Express app, MCP server factory, request routing
+  worker.ts          — Cloudflare Workers entry point (fetch handler + WorkerTransport)
+  worker-transport.ts — stateless single-request Transport for Workers/non-Node environments
   client.ts          — hd2Fetch(): in-memory cache + rate-limit queue over api.helldivers2.dev
-  reference-data.ts  — reads json/ files at startup, exposes lookup helpers
+  rate-limit.ts      — createTokenBucket() (Workers) + createRateLimiter() (Express middleware)
+  reference-data.ts  — reads static/ files at startup, exposes lookup helpers
   format-planet.ts   — loadWarSnapshot() (fetches 3 endpoints in parallel), formatPlanetDetails(), formatActivePlanetSummary()
   tool-types.ts      — Tool / ToolDefinition / ToolResult / ToolHandler interfaces
   utils.ts           — textResponse(), errorResponse(), stripMarkup helpers, toRelativeTime()
@@ -43,7 +57,10 @@ src/
     assignments.ts   — get_assignments
     news.ts          — get_dispatches, get_steam_news
     dss.ts           — get_space_station_details
-json/                — static reference data files (planets, biomes, factions, effects, items…)
+static/              — static reference data files (planets, biomes, factions, effects, items…)
+scripts/
+  endpoint-tests.ts  — live integration test runner via MCP client SDK
+  curl-tests.sh      — raw curl smoke tests
 ```
 
 ### Adding a Tool
@@ -58,7 +75,9 @@ Wraps all upstream calls. Checks an in-memory cache (2-minute TTL) first; on cac
 
 ### Reference Data
 
-`getReferenceData()` reads the `json/` directory once at startup and caches the result in memory. Use the named lookup helpers (`lookupPlanetName`, `lookupFaction`, `lookupBiome`, etc.) rather than accessing the raw cache object.
+`getReferenceData()` reads the `static/` directory once at startup and caches the result in memory. Use the named lookup helpers (`lookupPlanetName`, `lookupFaction`, `lookupBiome`, etc.) rather than accessing the raw cache object.
+
+In the Workers entry point (`worker.ts`) reference data is loaded via static JSON imports (`import … with { type: 'json' }`) and injected with `setReferenceData()` — the filesystem is unavailable in Workers isolates.
 
 ### `loadWarSnapshot(hd2Fetch)`
 
@@ -69,7 +88,13 @@ Parallel-fetches `/api/v1/war/status`, `/api/v1/war/info`, and `/api/v1/stats/wa
 ```
 X_SUPER_CONTACT=your-email@example.com   # sent as X-Super-Contact header per API etiquette
 PORT=3000
+BIND_HOST=127.0.0.1                      # interface to bind (default: 127.0.0.1)
+MCP_ALLOWED_ORIGINS=                     # comma-separated browser origins; empty = server-to-server only
+MCP_RATE_LIMIT_PER_MIN=60               # sustained request rate per client IP
+MCP_RATE_LIMIT_BURST=60                 # burst capacity (defaults to MCP_RATE_LIMIT_PER_MIN)
 ```
+
+For Cloudflare Workers, secrets are set via `wrangler secret put X-SUPER-CONTACT`; the other vars map to Worker bindings defined in `wrangler.jsonc`.
 
 ## TypeScript & Module Setup
 

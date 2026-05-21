@@ -2,8 +2,18 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const JSON_DIR = path.resolve(__dirname, '..', 'static');
+// Computed lazily so this module can be imported in non-Node runtimes
+// (e.g. Cloudflare Workers, where import.meta.url is undefined and the
+// filesystem is unavailable). Workers inject data via setReferenceData()
+// and never reach readJson(), so the JSON dir is only resolved on demand.
+let jsonDir: string | null = null;
+function getJsonDir(): string {
+  if (jsonDir === null) {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    jsonDir = path.resolve(dir, '..', 'static');
+  }
+  return jsonDir;
+}
 
 export interface PlanetRef {
   name?: string;
@@ -44,7 +54,7 @@ export interface ReferenceData {
 let cache: ReferenceData | null = null;
 
 function readJson<T>(relativePath: string): T | null {
-  const filePath = path.join(JSON_DIR, relativePath);
+  const filePath = path.join(getJsonDir(), relativePath);
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(raw) as T;
@@ -52,6 +62,12 @@ function readJson<T>(relativePath: string): T | null {
     console.warn(`[reference-data] Failed to read ${relativePath}: ${(err as Error).message}`);
     return null;
   }
+}
+
+// Bypass filesystem loading by injecting pre-built reference data.
+// Used by the Cloudflare Workers entry point, which bundles static JSON via ESM imports.
+export function setReferenceData(data: ReferenceData): void {
+  cache = data;
 }
 
 export function getReferenceData(): ReferenceData {
