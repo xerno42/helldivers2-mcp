@@ -11,18 +11,18 @@ The upstream data source is the community API at `https://api.helldivers2.dev`. 
 ## Development Commands
 
 ```bash
-pnpm dev              # tsx watch — hot reload
-pnpm build            # tsc → dist/
-pnpm start            # node dist/index.js (after build)
-pnpm lint             # eslint src
-pnpm test             # Jest (ESM mode via --experimental-vm-modules)
-pnpm test:watch
-pnpm test:coverage
+npm run dev              # tsx watch — hot reload
+npm run build            # tsc → dist/
+npm run start            # node dist/index.js (after build)
+npm run lint             # eslint src
+npm run test             # Jest (ESM mode via --experimental-vm-modules)
+npm run test:watch
+npm run test:coverage
 ```
 
 Run a single test file:
 ```bash
-pnpm test src/__tests__/tools.war.test.ts
+npm run test src/__tests__/tools.war.test.ts
 ```
 
 ## Architecture

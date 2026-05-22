@@ -15,6 +15,8 @@ RUN npm run build
 
 FROM node:22-alpine
 
+LABEL io.modelcontextprotocol.server.name="io.github.xerno42/helldivers2-mcp"
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

@@ -10,13 +10,13 @@ Data is sourced from the community API at [api.helldivers2.dev](https://api.hell
 
 | Tool | Description |
 |------|-------------|
-| `get_war_status` | Aggregated war statistics and a list of active planets with player counts, events, and attacking vectors |
-| `get_assignments` | Active Major Orders — tasks, rewards, progress, and deadlines |
+| `get_war_status` | Galaxy-wide war statistics (kills by faction, missions won/lost, accuracy, deaths, impact multiplier) and active planets with owner, player count, active events, attack vectors, and region health |
+| `get_assignments` | Active Major Orders with title, briefing, decoded task list (faction, difficulty, target planet), current progress numbers, reward type and amount, and time until expiry |
 | `get_all_planets` | Full planet list with IDs, names, and sectors |
-| `get_planet_details` | Detailed per-planet info: biome, hazards, factions, active events, and statistics (up to 5 planets per call) |
-| `get_dispatches` | In-game dispatch feed (High Command broadcasts) |
-| `get_steam_news` | Recent Steam news articles for Helldivers 2 |
-| `get_space_station_details` | Democracy Space Station status, orbital cannon health, and active tactical actions |
+| `get_planet_details` | Detailed per-planet info: biome, hazards, initial/current owner, health, waypoints, active events, full combat statistics, attacking planets, and regions (up to 5 planets per call) |
+| `get_dispatches` | In-game dispatch feed — High Command broadcasts with published date (relative time) and message text; optional `limit` parameter (default 20, max 50) |
+| `get_steam_news` | Steam news for Helldivers 2 with title, URL, publish date (relative time), and full article content; optional `limit` parameter (default 10, max 30) |
+| `get_space_station_details` | DSS details: current host planet (full planet info), time until next election, and active tactical actions with name, description, status, planet effects, and resource costs |
 
 ---
 
@@ -32,20 +32,26 @@ Data is sourced from the community API at [api.helldivers2.dev](https://api.hell
 ```bash
 cp .env.example .env   # set X_SUPER_CONTACT=your@email.com
 npm install
-npm dev               # hot-reload via tsx watch on :3000
+npm run dev               # hot-reload via tsx watch on :3000
 ```
 
 ### Production build
 
 ```bash
-npm build   # tsc → dist/
-npm start
+npm run build   # tsc → dist/
+npm run start
 ```
 
 ### Docker
 
+Image is available on [Docker Hub](https://hub.docker.com/r/xerno42/helldivers2-mcp).
+
 ```bash
-docker build -t helldivers2-mcp .
+docker pull xerno42/helldivers2-mcp # pull from Docker Hub
+# or
+docker build -t helldivers2-mcp . # build locally
+
+#then run with:
 docker run -p 3000:3000 -e X_SUPER_CONTACT=your@email.com helldivers2-mcp
 ```
 
@@ -74,6 +80,151 @@ All configuration is via environment variables.
 | `GET` | `/health` | Liveness check — returns `{ "ok": true }` |
 
 The server uses the **stateless** Streamable HTTP transport. Each `POST /mcp` request creates a fresh `McpServer` + transport pair, handles the request, then tears them down. There is no session state.
+
+---
+
+## Usage in Code
+
+Call the MCP server directly over HTTP using the Streamable HTTP transport. Each request is a JSON-RPC `tools/call` message sent to `POST /mcp`.
+
+### JavaScript / TypeScript
+
+Using the official [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk):
+
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+const client = new Client({ name: "my-app", version: "1.0.0" });
+
+const transport = new StreamableHTTPClientTransport(
+  new URL("https://mcp.avengersofsuperearth.com/mcp")
+);
+
+await client.connect(transport);
+
+// List available tools
+const { tools } = await client.listTools();
+console.log(tools.map((t) => t.name));
+
+// Get current war status
+const warStatus = await client.callTool({
+  name: "get_war_status",
+  arguments: {},
+});
+console.log(warStatus.content[0].text);
+
+// Get details for specific planets by index (up to 5)
+const planets = await client.callTool({
+  name: "get_planet_details",
+  arguments: { planetindices: [57, 153] },
+});
+console.log(planets.content[0].text);
+
+await client.close();
+```
+
+Without the SDK — raw JSON-RPC over `fetch`:
+
+```typescript
+async function callTool(name: string, args: Record<string, unknown> = {}) {
+  const res = await fetch("https://mcp.avengersofsuperearth.com/mcp", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+  });
+  const text = await res.text();
+  // The response is an SSE frame ("event: message\ndata: {json}\n\n");
+  // concatenate its data line(s) to recover the JSON-RPC payload.
+  const json = text
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim())
+    .join("");
+  const data = JSON.parse(json);
+  return data.result.content[0].text;
+}
+
+const status = await callTool("get_war_status");
+const assignments = await callTool("get_assignments");
+const dispatches = await callTool("get_dispatches", { limit: 5 });
+const planets = await callTool("get_planet_details", { planetindices: [57, 153] });
+```
+
+### Python
+
+Using the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk):
+
+```python
+import asyncio
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
+async def main():
+    async with streamablehttp_client("https://mcp.avengersofsuperearth.com/mcp") as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            # List available tools
+            tools = await session.list_tools()
+            print([t.name for t in tools.tools])
+
+            # Get current war status
+            result = await session.call_tool("get_war_status", {})
+            print(result.content[0].text)
+
+            # Get details for specific planets by index (up to 5)
+            result = await session.call_tool(
+                "get_planet_details",
+                {"planetindices": [57, 153]},
+            )
+            print(result.content[0].text)
+
+asyncio.run(main())
+```
+
+Without the SDK — raw JSON-RPC over `httpx`:
+
+```python
+import httpx
+
+MCP_URL = "https://mcp.avengersofsuperearth.com/mcp"
+
+def call_tool(name: str, arguments: dict = {}) -> str:
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": name, "arguments": arguments},
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    response = httpx.post(MCP_URL, json=payload, headers=headers)
+    response.raise_for_status()
+    import json
+    # The response is an SSE frame ("event: message\ndata: {json}\n\n");
+    # concatenate its data line(s) to recover the JSON-RPC payload.
+    text = "".join(
+        line[5:].strip()
+        for line in response.text.splitlines()
+        if line.startswith("data:")
+    )
+    return json.loads(text)["result"]["content"][0]["text"]
+
+status = call_tool("get_war_status")
+assignments = call_tool("get_assignments")
+planets = call_tool("get_planet_details", {"planetindices": [57, 153]})
+```
 
 ---
 
@@ -126,16 +277,16 @@ A public instance is available at `https://mcp.avengersofsuperearth.com/mcp`. No
 ## Development
 
 ```bash
-npm test              # Jest (ESM mode)
-npm test:watch
-npm test:coverage
-npm lint              # ESLint
+npm run test              # Jest (ESM mode)
+npm run test:watch
+npm run test:coverage
+npm run lint              # ESLint
 ```
 
 Run a single test file:
 
 ```bash
-npm test src/__tests__/tools.war.test.ts
+npm run test src/__tests__/tools.war.test.ts
 ```
 
 ### Adding a tool

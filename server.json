@@ -6,12 +6,19 @@
     "url": "https://github.com/xerno42/helldivers2-mcp",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "helldivers2-mcp",
-      "version": "1.0.0",
+      "version": "1.0.1",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "oci",
+      "identifier": "docker.io/xerno42/helldivers2-mcp:latest",
       "transport": {
         "type": "stdio"
       }
