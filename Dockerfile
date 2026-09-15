@@ -9,7 +9,8 @@ RUN npm install
 
 COPY tsconfig.json ./
 COPY src ./src
-COPY static ./static
+RUN git clone --depth 1 https://github.com/helldivers-2/json.git static \
+    && rm -rf static/.git
 
 RUN npm run build
 
