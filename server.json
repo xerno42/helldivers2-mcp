@@ -18,7 +18,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "docker.io/xerno42/helldivers2-mcp:latest",
+      "identifier": "docker.io/xerno42/helldivers2-mcp:1.0.1",
       "transport": {
         "type": "stdio"
       }

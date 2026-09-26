@@ -5,6 +5,10 @@
   "type": "module",
   "mcpName": "io.github.xerno42/helldivers2-mcp",
   "main": "dist/index.js",
+  "files": [
+    "dist",
+    "static"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -12,7 +16,10 @@
     "lint": "eslint src",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest --coverage"
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest --coverage",
+    "prepublishOnly": "npm run build",
+    "sync-version": "node scripts/sync-server-json.mjs",
+    "version": "npm run sync-version && git add server.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -34,8 +41,7 @@
     "ts-jest": "^29.4.10",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3",
-    "wrangler": "^4.92.0"
+    "typescript-eslint": "^8.59.3"
   },
   "repository": {
     "type": "git",

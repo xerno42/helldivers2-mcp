@@ -1,0 +1,135 @@
+name: Publish
+
+# Every push to main is checked against the version already published on npm.
+# Publishing only actually happens when package.json's version has moved on
+# (i.e. someone ran `npm version <bump>`, which also syncs server.json via
+# scripts/sync-server-json.mjs). Plain pushes without a version bump are a
+# cheap no-op.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      publish: ${{ steps.check.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: check
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          PUBLISHED=$(npm view helldivers2-mcp version 2>/dev/null || echo "none")
+          echo "local version: $VERSION / published npm version: $PUBLISHED"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$VERSION" = "$PUBLISHED" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify server.json is in sync with package.json
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
+          SERVER_VERSION=$(jq -r '.version' server.json)
+          NPM_PKG_VERSION=$(jq -r '.packages[] | select(.registryType=="npm") | .version' server.json)
+          OCI_TAG=$(jq -r '.packages[] | select(.registryType=="oci") | .identifier' server.json | sed 's/.*://')
+          for v in "$SERVER_VERSION" "$NPM_PKG_VERSION" "$OCI_TAG"; do
+            if [ "$v" != "$VERSION" ]; then
+              echo "::error::server.json (found $v) is out of sync with package.json ($VERSION). Run 'npm run sync-version' and commit the result."
+              exit 1
+            fi
+          done
+
+  test:
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  publish-npm:
+    needs: [check, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # provenance
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-docker:
+    needs: [check, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            xerno42/helldivers2-mcp:latest
+            xerno42/helldivers2-mcp:${{ needs.check.outputs.version }}
+
+  publish-mcp-registry:
+    needs: [check, publish-npm, publish-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # GitHub OIDC auth to the MCP registry
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish
