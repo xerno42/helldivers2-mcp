@@ -124,6 +124,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Wait for npm package to propagate
+        run: |
+          VERSION="${{ needs.check.outputs.version }}"
+          for i in $(seq 1 10); do
+            if npm view helldivers2-mcp@"$VERSION" version >/dev/null 2>&1; then
+              echo "npm registry has helldivers2-mcp@$VERSION"
+              exit 0
+            fi
+            echo "npm registry doesn't see helldivers2-mcp@$VERSION yet (attempt $i/10), waiting 15s..."
+            sleep 15
+          done
+          echo "::error::helldivers2-mcp@$VERSION never became visible on the npm registry"
+          exit 1
+
       - name: Install mcp-publisher
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
