@@ -55,7 +55,7 @@ json/                — static reference data files (planets, biomes, factions,
 
 ### `hd2Fetch<T>(endpoint)`
 
-Wraps all upstream calls. Checks an in-memory cache (2-minute TTL) first; on cache miss, enqueues the request and processes it through a rate-limit-aware queue that respects `X-Ratelimit-Remaining` / `Retry-After` headers. All tool handlers must go through `hd2Fetch` — never call `fetch` directly.
+Wraps all upstream calls. Checks an in-memory cache (2-minute TTL) first, then joins any in-flight request for the same endpoint; otherwise enqueues the request and processes it through a rate-limit-aware queue that respects `X-Ratelimit-Remaining` / `Retry-After` headers. All tool handlers must go through `hd2Fetch` — never call `fetch` directly.
 
 ### Reference Data
 
@@ -63,7 +63,7 @@ Wraps all upstream calls. Checks an in-memory cache (2-minute TTL) first; on cac
 
 ### `loadWarSnapshot(hd2Fetch)`
 
-Parallel-fetches `/api/v1/war/status`, `/api/v1/war/info`, and `/api/v1/stats/war/season/all/summary` into a `WarSnapshot`. `get_war_status`, `get_planet_details`, and `get_space_station_details` all call this.
+Parallel-fetches `/raw/api/WarSeason/801/Status`, `/raw/api/WarSeason/801/WarInfo`, and `/raw/api/Stats/war/801/summary` into a `WarSnapshot`. `get_war_status`, `get_planet_details`, and `get_space_station_details` all call this.
 
 ## Environment
 

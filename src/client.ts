@@ -1,5 +1,6 @@
 const ROOT_URL = 'https://api.helldivers2.dev';
 const CACHE_TTL_MS = 2 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 10_000;
 
 interface CacheEntry {
   value: unknown;
@@ -7,6 +8,7 @@ interface CacheEntry {
 }
 
 const responseCache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<unknown>>();
 
 const rateLimitState = {
   limit: 5,
@@ -102,6 +104,7 @@ async function executeRequest<T>(endpoint: string): Promise<T> {
       'X-Super-Client': 'helldivers2-mcp',
       'X-Super-Contact': process.env.X_SUPER_CONTACT ?? '',
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   updateRateLimitFromHeaders(res.headers);
@@ -155,7 +158,10 @@ export function hd2Fetch<T>(endpoint: string): Promise<T> {
   }
   if (cached) responseCache.delete(endpoint);
 
-  return new Promise<T>((resolve, reject) => {
+  const pending = inFlight.get(endpoint);
+  if (pending) return pending as Promise<T>;
+
+  const request = new Promise<T>((resolve, reject) => {
     requestQueue.push({
       endpoint,
       resolve: resolve as (v: unknown) => void,
@@ -165,5 +171,7 @@ export function hd2Fetch<T>(endpoint: string): Promise<T> {
       console.error('[hd2] Queue processing failed:', err);
       reject(err);
     });
-  });
+  }).finally(() => inFlight.delete(endpoint));
+  inFlight.set(endpoint, request);
+  return request;
 }

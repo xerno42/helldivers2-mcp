@@ -95,4 +95,54 @@ describe('hd2Fetch', () => {
     expect(await result).toEqual(payload);
     expect(callCount).toBe(2);
   });
+
+  it('shares one upstream request between concurrent callers of the same endpoint', async () => {
+    const mockFetch = jest.fn<typeof fetch>().mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 })),
+    );
+    global.fetch = mockFetch;
+
+    const { hd2Fetch } = await import('../client.js');
+    const results = Promise.all([
+      hd2Fetch('/shared'),
+      hd2Fetch('/shared'),
+      hd2Fetch('/shared'),
+    ]);
+    await jest.runAllTimersAsync();
+
+    expect(await results).toEqual([{ ok: true }, { ok: true }, { ok: true }]);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('issues a new request after a shared request fails', async () => {
+    const mockFetch = jest
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('boom', { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    global.fetch = mockFetch;
+
+    const { hd2Fetch } = await import('../client.js');
+    const first = hd2Fetch('/flaky').catch((err: Error) => err);
+    await jest.runAllTimersAsync();
+    expect(await first).toBeInstanceOf(Error);
+
+    const second = hd2Fetch('/flaky');
+    await jest.runAllTimersAsync();
+    expect(await second).toEqual({ ok: true });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes an abort signal so a hung upstream request cannot stall the queue', async () => {
+    const mockFetch = jest.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    global.fetch = mockFetch;
+
+    const { hd2Fetch } = await import('../client.js');
+    const result = hd2Fetch('/signal');
+    await jest.runAllTimersAsync();
+    await result;
+
+    expect(mockFetch.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
 });
