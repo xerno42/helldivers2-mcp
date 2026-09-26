@@ -1,8 +1,22 @@
 # helldivers2-mcp
 
+[![npm version](https://img.shields.io/npm/v/helldivers2-mcp.svg)](https://www.npmjs.com/package/helldivers2-mcp)
+[![CI](https://github.com/xerno42/helldivers2-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/xerno42/helldivers2-mcp/actions/workflows/ci.yml)
+[![Docker Hub](https://img.shields.io/docker/v/xerno42/helldivers2-mcp?label=docker%20hub&sort=semver)](https://hub.docker.com/r/xerno42/helldivers2-mcp)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A stateless [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that exposes live **Helldivers 2** galactic war data to LLMs.
 
 Data is sourced from the community API at [api.helldivers2.dev](https://api.helldivers2.dev).
+
+## Packages
+
+| Registry | Package |
+|----------|---------|
+| npm | [`helldivers2-mcp`](https://www.npmjs.com/package/helldivers2-mcp) |
+| Docker Hub | [`xerno42/helldivers2-mcp`](https://hub.docker.com/r/xerno42/helldivers2-mcp) |
+| GitHub Container Registry | [`ghcr.io/xerno42/helldivers2-mcp`](https://github.com/xerno42/helldivers2-mcp/pkgs/container/helldivers2-mcp) |
+| MCP Registry | [`io.github.xerno42/helldivers2-mcp`](https://registry.modelcontextprotocol.io) |
 
 ---
 
@@ -44,10 +58,12 @@ npm run start
 
 ### Docker
 
-Image is available on [Docker Hub](https://hub.docker.com/r/xerno42/helldivers2-mcp).
+Image is available on [Docker Hub](https://hub.docker.com/r/xerno42/helldivers2-mcp) and [GitHub Container Registry](https://github.com/xerno42/helldivers2-mcp/pkgs/container/helldivers2-mcp).
 
 ```bash
-docker pull xerno42/helldivers2-mcp # pull from Docker Hub
+docker pull xerno42/helldivers2-mcp        # pull from Docker Hub
+# or
+docker pull ghcr.io/xerno42/helldivers2-mcp # pull from GHCR
 # or
 docker build -t helldivers2-mcp . # build locally
 
